@@ -215,6 +215,21 @@ class ApiClient {
     return data;
   }
 
+  Future<Map<String, dynamic>> postAuthed(String path, Map<String, dynamic> body) async {
+    final token = await _requireToken();
+    final res = await http.post(
+      Uri.parse('$baseUrl$path'),
+      headers: {
+        'Authorization': 'Bearer $token',
+        'Content-Type': 'application/json',
+      },
+      body: jsonEncode(body),
+    );
+    final data = _decodeBody(res);
+    _ensureOk(res, data);
+    return data;
+  }
+
   Future<Map<String, dynamic>> patchAuthed(String path, Map<String, dynamic> body) async {
     final token = await _requireToken();
     final res = await http.patch(
@@ -230,8 +245,71 @@ class ApiClient {
     return data;
   }
 
+  /// Like [postAuthed], but for endpoints that expect a raw JSON array (or
+  /// any non-object payload) instead of a JSON object body.
+  Future<Map<String, dynamic>> postAuthedJson(String path, dynamic body) async {
+    final token = await _requireToken();
+    final res = await http.post(
+      Uri.parse('$baseUrl$path'),
+      headers: {
+        'Authorization': 'Bearer $token',
+        'Content-Type': 'application/json',
+      },
+      body: jsonEncode(body),
+    );
+    final data = _decodeBody(res);
+    _ensureOk(res, data);
+    return data;
+  }
+
+  /// Multipart POST with an optional file field, for endpoints backed by
+  /// multer on the backend (notice attachments, learning materials).
+  Future<Map<String, dynamic>> postMultipartAuthed(
+    String path,
+    Map<String, String> fields, {
+    String? fileFieldName,
+    List<int>? fileBytes,
+    String? fileName,
+  }) async {
+    final token = await _requireToken();
+    final request = http.MultipartRequest('POST', Uri.parse('$baseUrl$path'))
+      ..headers['Authorization'] = 'Bearer $token'
+      ..fields.addAll(fields);
+
+    if (fileFieldName != null && fileBytes != null && fileName != null) {
+      request.files.add(http.MultipartFile.fromBytes(
+        fileFieldName,
+        fileBytes,
+        filename: fileName,
+      ));
+    }
+
+    final streamed = await request.send();
+    final res = await http.Response.fromStream(streamed);
+    final data = _decodeBody(res);
+    _ensureOk(res, data);
+    return data;
+  }
+
+  Future<Map<String, dynamic>> deleteAuthed(String path) async {
+    final token = await _requireToken();
+    final res = await http.delete(
+      Uri.parse('$baseUrl$path'),
+      headers: {
+        'Authorization': 'Bearer $token',
+        'Content-Type': 'application/json',
+      },
+    );
+    final data = _decodeBody(res);
+    _ensureOk(res, data);
+    return data;
+  }
+
   // ---------------- TOKEN HELPERS ----------------
 
   Future<void> saveToken(String token) => _tokenStorage.save(token);
   Future<void> logout() => _tokenStorage.clear();
+
+  /// The raw stored JWT (for passing to the embedded face-capture iframe).
+  Future<String?> currentToken() => _tokenStorage.read();
 }

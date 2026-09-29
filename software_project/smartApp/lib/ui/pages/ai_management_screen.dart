@@ -1,5 +1,12 @@
 import 'package:flutter/material.dart';
+import '../../features/lessons/lesson_catalog.dart';
 import 'app_shell.dart';
+
+void _soon(BuildContext context, String what) {
+  ScaffoldMessenger.of(context).showSnackBar(
+    SnackBar(content: Text('$what is not available in this build yet.')),
+  );
+}
 
 class AiManagementScreen extends StatefulWidget {
   const AiManagementScreen({super.key});
@@ -24,7 +31,7 @@ class _AiManagementScreenState extends State<AiManagementScreen> {
         SizedBox(
           height: 38,
           child: ElevatedButton.icon(
-            onPressed: () {},
+            onPressed: () => _soon(context, 'Lesson authoring'),
             icon: const Icon(Icons.add, size: 18),
             label: const Text('New Lesson'),
             style: ElevatedButton.styleFrom(
@@ -215,40 +222,13 @@ class _LessonsTab extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final lessons = const [
-      _Lesson(
-        title: 'Introduction to\nAlgebra',
-        subject: 'Mathematics',
-        level: 'beginner',
-        description:
-            'Algebra is a branch\nof mathematics\ndealing with\nsymbols and the\nrules for\nmanipulating those\nsymbols',
-        duration: '30 min',
-      ),
-      _Lesson(
-        title: 'Python Basics',
-        subject: 'Computer Science',
-        level: 'beginner',
-        description:
-            'Python is a\nhigh-level,\ninterpreted\nprogramming\nlanguage...',
-        duration: '45 min',
-      ),
-      _Lesson(
-        title: "Newton's Laws\nof Motion",
-        subject: 'Science',
-        level: 'intermediate',
-        description:
-            "Newton's First Law:\nAn object at rest\nstays at rest, and an\nobject in motion\nstays in motion\nunless...",
-        duration: '60 min',
-      ),
-    ];
-
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         _WrapGrid(
           columns: columns,
           children: [
-            ...lessons.map((l) => _LessonCard(lesson: l)),
+            ...lessonCatalog.map((l) => _LessonCard(lesson: l)),
             const _CreateLessonCard(),
           ],
         ),
@@ -257,25 +237,9 @@ class _LessonsTab extends StatelessWidget {
   }
 }
 
-class _Lesson {
-  const _Lesson({
-    required this.title,
-    required this.subject,
-    required this.level,
-    required this.description,
-    required this.duration,
-  });
-
-  final String title;
-  final String subject;
-  final String level;
-  final String description;
-  final String duration;
-}
-
 class _LessonCard extends StatelessWidget {
   const _LessonCard({required this.lesson});
-  final _Lesson lesson;
+  final Lesson lesson;
 
   @override
   Widget build(BuildContext context) {
@@ -311,25 +275,29 @@ class _LessonCard extends StatelessWidget {
                 fontWeight: FontWeight.w700,
               )),
           const SizedBox(height: 10),
-          Container(
-            width: double.infinity,
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: Colors.black.withOpacity(0.05)),
-            ),
-            child: Text(
-              lesson.description,
-              style: TextStyle(
-                fontSize: 11.5,
-                height: 1.35,
-                color: Colors.black.withOpacity(0.75),
-                fontWeight: FontWeight.w600,
+          Expanded(
+            child: Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: Colors.black.withOpacity(0.05)),
+              ),
+              child: Text(
+                lesson.description,
+                overflow: TextOverflow.ellipsis,
+                maxLines: 6,
+                style: TextStyle(
+                  fontSize: 11.5,
+                  height: 1.35,
+                  color: Colors.black.withOpacity(0.75),
+                  fontWeight: FontWeight.w600,
+                ),
               ),
             ),
           ),
-          const Spacer(),
+          const SizedBox(height: 10),
           Row(
             children: [
               Text('Duration:',
@@ -350,7 +318,7 @@ class _LessonCard extends StatelessWidget {
                 height: 36,
                 width: 92,
                 child: ElevatedButton(
-                  onPressed: () {},
+                  onPressed: () => _soon(context, 'Lesson editing'),
                   style: ElevatedButton.styleFrom(
                     backgroundColor: const Color(0xFF2563EB),
                     foregroundColor: Colors.white,
@@ -364,7 +332,7 @@ class _LessonCard extends StatelessWidget {
               ),
               const SizedBox(width: 14),
               TextButton(
-                onPressed: () {},
+                onPressed: () => _soon(context, 'Lesson preview'),
                 child: const Text('Preview',
                     style: TextStyle(fontWeight: FontWeight.w800)),
               ),
@@ -381,7 +349,10 @@ class _CreateLessonCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
+    return InkWell(
+      borderRadius: BorderRadius.circular(14),
+      onTap: () => _soon(context, 'Lesson authoring'),
+      child: Container(
       height: 290,
       decoration: BoxDecoration(
         color: Colors.transparent,
@@ -417,6 +388,7 @@ class _CreateLessonCard extends StatelessWidget {
             ),
           ],
         ),
+      ),
       ),
     );
   }

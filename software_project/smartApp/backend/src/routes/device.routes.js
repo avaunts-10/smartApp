@@ -1,88 +1,95 @@
-/*import { Router } from "express";
-
-const router = Router();
-
-// TEMP: no auth yet (we can add JWT middleware after)
-router.get("/", async (req, res) => {
-  res.json({
-    devices: [
-      { id: "main_lights", title: "Main Lights", isOn: true, sliderValue: 80 },
-      { id: "board_lights", title: "Board Lights", isOn: true, sliderValue: 100 },
-      { id: "projector", title: "Projector", isOn: false },
-      { id: "hvac", title: "HVAC System", isOn: true, sliderValue: 22 },
-      { id: "audio", title: "Audio System", isOn: false },
-      { id: "emergency_lights", title: "Emergency Lights", isOn: true, sliderValue: 50 }
-    ],
-  });
-});
-
-router.patch("/:id", async (req, res) => {
-  const { id } = req.params;
-  const { isOn, sliderValue } = req.body;
-
-  console.log("DEVICE UPDATE ✅", { id, isOn, sliderValue });
-
-  // TEMP: just return success (later save in DB)
-  res.json({ message: "Device updated", id, isOn, sliderValue });
-});
-
-export default router;
-*/
 import express from "express";
 import pool from "../db.js";
+import { requireAuth, requireRole } from "../middleware/auth.js";
 
 const router = express.Router();
+router.use(requireAuth);
 
-// GET /api/devices
-router.get("/", async (req, res) => {
+const capabilitiesFor = (type) => {
+  if (type === "fan") {
+    return { control: "fan_speed", min: 1, max: 3, unit: "level" };
+  }
+  if (type === "bulb") {
+    return { control: "brightness", min: 0, max: 100, unit: "%" };
+  }
+  return { control: "monitor", min: null, max: null, unit: null };
+};
+
+const toDevice = (row) => ({
+  id: row.id,
+  title: row.title,
+  type: row.device_type,
+  isOn: row.is_on,
+  sliderValue: row.slider_value,
+  online: row.online,
+  updatedAt: row.updated_at,
+  capabilities: capabilitiesFor(row.device_type),
+});
+
+router.get("/", async (_req, res) => {
   try {
-    const result = await pool.query(`
-      SELECT 
-        id,
-        title,
-        is_on AS "isOn",
-        slider_value AS "sliderValue"
-      FROM devices
-      ORDER BY id;
-    `);
-
-    res.json({ devices: result.rows });
+    const { rows } = await pool.query(
+      `SELECT id, title, device_type, is_on, slider_value, online, updated_at
+       FROM devices
+       ORDER BY CASE device_type WHEN 'fan' THEN 1 WHEN 'bulb' THEN 2 ELSE 3 END`
+    );
+    res.json({ devices: rows.map(toDevice), updatedAt: new Date() });
   } catch (err) {
     console.error("GET /api/devices ERROR:", err);
-    res.status(500).json({ message: err.message });
+    res.status(500).json({ message: "Could not load classroom devices" });
   }
 });
 
-// PATCH /api/devices/:id
-router.patch("/:id", async (req, res) => {
+router.patch("/:id", requireRole("admin", "teacher"), async (req, res) => {
   try {
-    const { id } = req.params;
-    const { isOn, sliderValue } = req.body;
-
-    const result = await pool.query(
-      `
-      UPDATE devices
-      SET 
-        is_on = COALESCE($1, is_on),
-        slider_value = $2
-      WHERE id = $3
-      RETURNING 
-        id,
-        title,
-        is_on AS "isOn",
-        slider_value AS "sliderValue";
-      `,
-      [isOn, sliderValue ?? null, id]
+    const { rows } = await pool.query(
+      `SELECT id, title, device_type, is_on, slider_value, online, updated_at
+       FROM devices WHERE id = $1`,
+      [req.params.id]
     );
-
-    if (result.rowCount === 0) {
+    if (!rows.length) {
       return res.status(404).json({ message: "Device not found" });
     }
 
-    res.json({ device: result.rows[0] });
+    const current = rows[0];
+    if (current.device_type === "rfid") {
+      return res.status(400).json({ message: "RFID reader status is monitor-only" });
+    }
+    if (!current.online) {
+      return res.status(409).json({ message: "Device is offline" });
+    }
+
+    const { isOn, sliderValue } = req.body;
+    if (isOn !== undefined && typeof isOn !== "boolean") {
+      return res.status(400).json({ message: "isOn must be a boolean" });
+    }
+
+    let nextSlider = current.slider_value;
+    if (sliderValue !== undefined) {
+      if (!Number.isInteger(sliderValue)) {
+        return res.status(400).json({ message: "sliderValue must be an integer" });
+      }
+      const { min, max } = capabilitiesFor(current.device_type);
+      if (sliderValue < min || sliderValue > max) {
+        return res.status(400).json({
+          message: `sliderValue must be between ${min} and ${max}`,
+        });
+      }
+      nextSlider = sliderValue;
+    }
+
+    const updated = await pool.query(
+      `UPDATE devices
+       SET is_on = COALESCE($1, is_on), slider_value = $2, updated_at = now()
+       WHERE id = $3
+       RETURNING id, title, device_type, is_on, slider_value, online, updated_at`,
+      [isOn, nextSlider, req.params.id]
+    );
+
+    res.json({ device: toDevice(updated.rows[0]) });
   } catch (err) {
     console.error("PATCH /api/devices/:id ERROR:", err);
-    res.status(500).json({ message: err.message });
+    res.status(500).json({ message: "Could not update device" });
   }
 });
 

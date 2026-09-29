@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Facial Recognition</title>
+  <style>
+    :root { color-scheme: dark; }
+    * { box-sizing: border-box; }
+    html, body {
+      margin: 0; height: 100%;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: #0b1220; color: #e8eefc;
+    }
+    #wrap { position: relative; width: 100%; height: 100%; overflow: hidden; }
+    video, #overlay {
+      position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover;
+    }
+    #overlay { pointer-events: none; }
+    #bar {
+      position: absolute; left: 0; right: 0; bottom: 0;
+      padding: 10px 12px; display: flex; gap: 10px; align-items: center;
+      background: linear-gradient(180deg, transparent, rgba(3,8,20,.85));
+      font-size: 13px;
+    }
+    #status { flex: 1; opacity: .9; }
+    button {
+      appearance: none; border: 0; border-radius: 10px; padding: 9px 16px;
+      font-weight: 700; font-size: 13px; cursor: pointer;
+      background: #2d66f6; color: #fff;
+    }
+    button:disabled { opacity: .5; cursor: default; }
+    #toast {
+      position: absolute; top: 12px; left: 50%; transform: translateX(-50%);
+      background: rgba(3,8,20,.8); padding: 8px 14px; border-radius: 999px;
+      font-size: 13px; font-weight: 600; opacity: 0; transition: opacity .2s;
+      border: 1px solid rgba(255,255,255,.12);
+    }
+    #toast.show { opacity: 1; }
+  </style>
+</head>
+<body>
+  <div id="wrap">
+    <video id="video" autoplay muted playsinline></video>
+    <canvas id="overlay"></canvas>
+    <div id="toast"></div>
+    <div id="bar">
+      <span id="status">Loading models…</span>
+      <button id="capture" style="display:none">Capture</button>
+    </div>
+  </div>
+  <script src="./face-api.min.js"></script>
+  <script src="./main.js"></script>
+</body>
+</html>

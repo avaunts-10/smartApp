@@ -1,30 +1,49 @@
-// This is a basic Flutter widget test.
+// Basic smoke test: the app builds and shows the admin login screen.
 //
-// To perform an interaction with a widget in your test, use the WidgetTester
-// utility in the flutter_test package. For example, you can send tap and scroll
-// gestures. You can also use WidgetTester to find child widgets in the widget
-// tree, read text, and verify that the values of widget properties are correct.
-
-import 'package:flutter/material.dart';
+// Before the login screen ever renders, _AuthGate (lib/main.dart) awaits
+// authService.restoreSession(), which reads a stored token via
+// flutter_secure_storage — a plugin backed by a platform MethodChannel.
+// `flutter test` has no real platform on the other end of that channel, and
+// with no mock registered, the resulting Future never completes within a
+// `tester.pump()` loop: Flutter's test binding does eventually resolve an
+// unmocked channel call with a MissingPluginException, but only on a real
+// event-loop turn (e.g. `Future.delayed`), not on the fake clock
+// `tester.pump()` advances. So FutureBuilder stays on ConnectionState.waiting
+// forever, the CircularProgressIndicator never goes away, AdminLoginScreen
+// never builds, and no amount of pumping makes 'Smart Classroom IoT' or
+// 'Sign In' appear — this was the actual cause of the failure, not a timing
+// issue. Mocking the channel lets the read resolve immediately as "no stored
+// token", which is exactly the state a fresh install is in.
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-//import 'package:smartapp/main.dart';
+import 'package:smartApp/main.dart';
 
 void main() {
-  testWidgets('Counter increments smoke test', (WidgetTester tester) async {
-    // Build our app and trigger a frame.
+  const secureStorageChannel =
+      MethodChannel('plugins.it_nomads.com/flutter_secure_storage');
+
+  setUp(() {
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(secureStorageChannel, (call) async => null);
+  });
+
+  tearDown(() {
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(secureStorageChannel, null);
+  });
+
+  testWidgets('App boots to the admin login screen', (WidgetTester tester) async {
     await tester.pumpWidget(const MyApp());
 
-    // Verify that our counter starts at 0.
-    expect(find.text('0'), findsOneWidget);
-    expect(find.text('1'), findsNothing);
+    // A bounded pump loop, not pumpAndSettle(): something on the login
+    // screen keeps a transient animation alive (e.g. a text field's blinking
+    // cursor), so the tree never fully "settles".
+    for (var i = 0; i < 15; i++) {
+      await tester.pump(const Duration(milliseconds: 200));
+    }
 
-    // Tap the '+' icon and trigger a frame.
-    await tester.tap(find.byIcon(Icons.add));
-    await tester.pump();
-
-    // Verify that our counter has incremented.
-    expect(find.text('0'), findsNothing);
-    expect(find.text('1'), findsOneWidget);
+    expect(find.text('Smart Classroom IoT'), findsOneWidget);
+    expect(find.text('Sign In'), findsOneWidget);
   });
 }

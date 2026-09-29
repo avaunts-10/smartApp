@@ -251,11 +251,6 @@ class _Sidebar extends StatelessWidget {
               label: 'Analytics',
               selected: selectedRoute == '/analytics',
               onTap: () => onNavigate('/analytics')),
-          _NavItem(
-              icon: Icons.calendar_month_outlined,
-              label: 'Schedule',
-              selected: selectedRoute == '/schedule',
-              onTap: () => onNavigate('/schedule')),
           const SizedBox(height: 18),
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 14),
@@ -386,6 +381,15 @@ class _NavItem extends StatelessWidget {
 //after overflow sloving
 import 'package:flutter/material.dart';
 
+import '../../core/di/app_di.dart';
+import '../../core/auth/role_access.dart';
+import '../../features/auth/auth_service.dart';
+
+/// True when this role's pages render a classroom photo behind the shared
+/// shell — the sidebar/top bar go semi-transparent so it shows through.
+bool _hasPhotoBg(String? role) =>
+    role == 'student' || role == 'admin' || role == 'teacher';
+
 class AppShell extends StatelessWidget {
   const AppShell({
     super.key,
@@ -394,6 +398,7 @@ class AppShell extends StatelessWidget {
     required this.selectedRoute,
     required this.body,
     this.actions,
+    this.solidBackground,
   });
 
   final String title;
@@ -401,6 +406,10 @@ class AppShell extends StatelessWidget {
   final String selectedRoute;
   final Widget body;
   final List<Widget>? actions;
+
+  /// When set, replaces the usual per-role classroom-photo background with a
+  /// flat color for this screen only (every other screen is unaffected).
+  final Color? solidBackground;
 
   static const _sidebarWidth = 260.0;
 
@@ -410,6 +419,8 @@ class AppShell extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final wide = _isWide(context);
+    final role = authService.user.value?.role;
+    final bgAsset = solidBackground != null ? null : _backgroundFor(role);
 
     final sidebar = _Sidebar(
       selectedRoute: selectedRoute,
@@ -419,7 +430,9 @@ class AppShell extends StatelessWidget {
       },
     );
 
-    return Scaffold(
+    final scaffold = Scaffold(
+      backgroundColor:
+          solidBackground ?? (bgAsset != null ? Colors.transparent : null),
       drawer: wide ? null : Drawer(child: SafeArea(child: sidebar)),
       body: SafeArea(
         child: Row(
@@ -451,6 +464,36 @@ class AppShell extends StatelessWidget {
         ),
       ),
     );
+
+    if (bgAsset == null) return scaffold;
+
+    // Every page for this role shares a classroom photo behind the
+    // (semi-transparent) sidebar/top bar and the gaps between cards.
+    return Stack(
+      children: [
+        Positioned.fill(
+          child: Image.asset(bgAsset, fit: BoxFit.cover),
+        ),
+        Positioned.fill(
+          child: Container(color: Colors.white.withOpacity(0.32)),
+        ),
+        scaffold,
+      ],
+    );
+  }
+
+  /// Each role's background photo behind the shared shell, or null for a
+  /// plain background.
+  static String? _backgroundFor(String? role) {
+    switch (role) {
+      case 'student':
+        return 'assets/images/classroom_bg.jpg';
+      case 'admin':
+      case 'teacher':
+        return 'assets/images/classroom_blue_bg.jpg';
+      default:
+        return null;
+    }
   }
 }
 
@@ -469,11 +512,12 @@ class _TopBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final hasPhotoBg = _hasPhotoBg(authService.user.value?.role);
     return Container(
       height: 64,
       padding: const EdgeInsets.symmetric(horizontal: 14),
       decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.7),
+        color: Colors.white.withOpacity(hasPhotoBg ? 0.45 : 0.7),
         border: Border(
           bottom: BorderSide(color: Colors.black.withOpacity(0.06)),
         ),
@@ -522,44 +566,82 @@ class _TopBar extends StatelessWidget {
 }
 
 class _UserPill extends StatelessWidget {
+  Future<void> _logout(BuildContext context) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Sign out?'),
+        content: const Text('You will need to log in again.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Sign out'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+
+    await authService.logout();
+    if (!context.mounted) return;
+    Navigator.of(context).pushNamedAndRemoveUntil('/login/admin', (_) => false);
+  }
+
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-      decoration: BoxDecoration(
-        color: const Color(0xFFF3F6FF),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Colors.black.withOpacity(0.06)),
-      ),
-      child: Row(
-        children: [
-          const CircleAvatar(
-            radius: 12,
-            backgroundColor: Color(0xFF2D66F6),
-            child: Icon(Icons.person, size: 14, color: Colors.white),
+    return ValueListenableBuilder<AuthUser?>(
+      valueListenable: authService.user,
+      builder: (context, user, _) {
+        final name = user?.email.split('@').first ?? 'Guest';
+        final role = user?.role ?? '—';
+        return Container(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+          decoration: BoxDecoration(
+            color: const Color(0xFFF3F6FF),
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: Colors.black.withOpacity(0.06)),
           ),
-          const SizedBox(width: 8),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisAlignment: MainAxisAlignment.center,
+          child: Row(
             children: [
-              const Text(
-                'Admin User',
-                style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700),
+              const CircleAvatar(
+                radius: 12,
+                backgroundColor: Color(0xFF2D66F6),
+                child: Icon(Icons.person, size: 14, color: Colors.white),
               ),
-              Text(
-                'admin',
-                style: TextStyle(
-                  fontSize: 11,
-                  color: Colors.black.withOpacity(0.55),
-                ),
+              const SizedBox(width: 8),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Text(
+                    name,
+                    style: const TextStyle(
+                        fontSize: 12, fontWeight: FontWeight.w700),
+                  ),
+                  Text(
+                    role,
+                    style: TextStyle(
+                      fontSize: 11,
+                      color: Colors.black.withOpacity(0.55),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(width: 10),
+              IconButton(
+                tooltip: 'Sign out',
+                onPressed: () => _logout(context),
+                icon: Icon(Icons.logout,
+                    size: 18, color: Colors.red.withOpacity(0.85)),
               ),
             ],
           ),
-          const SizedBox(width: 10),
-          Icon(Icons.logout, size: 18, color: Colors.red.withOpacity(0.85)),
-        ],
-      ),
+        );
+      },
     );
   }
 }
@@ -572,172 +654,229 @@ class _Sidebar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      color: Colors.white.withOpacity(0.7),
-      child: SingleChildScrollView(
-        padding: const EdgeInsets.only(bottom: 12),
-        child: Column(
-          children: [
-            const SizedBox(height: 14),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 14),
-              child: Row(
-                children: [
-                  Container(
-                    width: 44,
-                    height: 44,
-                    decoration: BoxDecoration(
-                      color: const Color(0xFF2D66F6),
-                      borderRadius: BorderRadius.circular(14),
-                      boxShadow: [
-                        BoxShadow(
-                          blurRadius: 18,
-                          offset: const Offset(0, 10),
-                          color: Colors.black.withOpacity(0.12),
-                        )
-                      ],
-                    ),
-                    child: const Icon(Icons.grid_view_rounded,
-                        color: Colors.white),
-                  ),
-                  const SizedBox(width: 12),
-                  const Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text('Smart Classroom',
-                            style: TextStyle(
-                                fontWeight: FontWeight.w800, fontSize: 14)),
-                        SizedBox(height: 2),
-                        Text('IoT Management',
-                            style: TextStyle(fontSize: 11, color: Colors.grey)),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 18),
+    return ValueListenableBuilder<AuthUser?>(
+      valueListenable: authService.user,
+      builder: (context, user, _) {
+        final role = user?.role;
+        bool allowed(String route) => canAccessRoute(role, route);
 
+        // Classroom-operations tools: staff only (see roleRoutes).
+        final opsItems = <Widget>[
+          if (allowed('/dashboard'))
             _NavItem(
               icon: Icons.dashboard_outlined,
               label: 'Dashboard',
               selected: selectedRoute == '/dashboard',
               onTap: () => onNavigate('/dashboard'),
             ),
+          if (allowed('/environmental'))
             _NavItem(
               icon: Icons.thermostat_outlined,
               label: 'Environmental',
               selected: selectedRoute == '/environmental',
               onTap: () => onNavigate('/environmental'),
             ),
+          if (allowed('/device-control'))
             _NavItem(
               icon: Icons.power_settings_new,
               label: 'Device Control',
               selected: selectedRoute == '/device-control',
               onTap: () => onNavigate('/device-control'),
             ),
+          if (allowed('/attendance'))
             _NavItem(
               icon: Icons.how_to_reg_outlined,
               label: 'Attendance',
               selected: selectedRoute == '/attendance',
               onTap: () => onNavigate('/attendance'),
             ),
+          if (allowed('/analytics'))
             _NavItem(
               icon: Icons.query_stats_outlined,
               label: 'Analytics',
               selected: selectedRoute == '/analytics',
               onTap: () => onNavigate('/analytics'),
             ),
+          if (allowed('/schedule'))
             _NavItem(
               icon: Icons.calendar_month_outlined,
-              label: 'Schedule',
+              label: 'Smart Schedule',
               selected: selectedRoute == '/schedule',
               onTap: () => onNavigate('/schedule'),
             ),
-
-            const SizedBox(height: 18),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 14),
-              child: Align(
-                alignment: Alignment.centerLeft,
-                child: Text(
-                  'AI TEACHING ASSISTANT',
-                  style: TextStyle(
-                    fontSize: 10.5,
-                    fontWeight: FontWeight.w700,
-                    color: Colors.black.withOpacity(0.45),
-                  ),
-                ),
-              ),
+          if (allowed('/admin-users'))
+            _NavItem(
+              icon: Icons.admin_panel_settings_outlined,
+              label: 'User Management',
+              selected: selectedRoute == '/admin-users',
+              onTap: () => onNavigate('/admin-users'),
             ),
-            const SizedBox(height: 10),
+          if (allowed('/notices'))
+            _NavItem(
+              icon: Icons.campaign_outlined,
+              label: 'Notice Board',
+              selected: selectedRoute == '/notices',
+              onTap: () => onNavigate('/notices'),
+            ),
+          if (allowed('/materials'))
+            _NavItem(
+              icon: Icons.folder_copy_outlined,
+              label: 'Materials',
+              selected: selectedRoute == '/materials',
+              onTap: () => onNavigate('/materials'),
+            ),
+          if (allowed('/quizzes'))
+            _NavItem(
+              icon: Icons.quiz_outlined,
+              label: 'Quizzes',
+              selected: selectedRoute == '/quizzes',
+              onTap: () => onNavigate('/quizzes'),
+            ),
+        ];
 
+        // A student's own AI tutor (chat/learning/progress), or a staff
+        // member's console for managing that tutor's lessons and rosters.
+        final aiItems = <Widget>[
+          if (allowed('/ai-teacher'))
             _NavItem(
               icon: Icons.smart_toy_outlined,
               label: 'AI Teacher',
               selected: selectedRoute == '/ai-teacher',
               onTap: () => onNavigate('/ai-teacher'),
             ),
+          if (allowed('/learning'))
             _NavItem(
               icon: Icons.menu_book_outlined,
               label: 'Learning',
               selected: selectedRoute == '/learning',
               onTap: () => onNavigate('/learning'),
             ),
+          if (allowed('/progress'))
             _NavItem(
               icon: Icons.trending_up_outlined,
               label: 'Progress',
               selected: selectedRoute == '/progress',
               onTap: () => onNavigate('/progress'),
             ),
+          if (allowed('/ai-management'))
             _NavItem(
               icon: Icons.settings_suggest_outlined,
               label: 'AI Management',
               selected: selectedRoute == '/ai-management',
               onTap: () => onNavigate('/ai-management'),
             ),
+        ];
 
-            const SizedBox(height: 18),
-            Padding(
-              padding: const EdgeInsets.all(14),
-              child: Container(
-                width: double.infinity,
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: const Color(0xFFEAF1FF),
-                  borderRadius: BorderRadius.circular(14),
-                  border: Border.all(color: Colors.black.withOpacity(0.05)),
+        return Container(
+          color: Colors.white.withOpacity(_hasPhotoBg(role) ? 0.45 : 0.7),
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.only(bottom: 12),
+            child: Column(
+              children: [
+                const SizedBox(height: 14),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 14),
+                  child: Row(
+                    children: [
+                      Container(
+                        width: 44,
+                        height: 44,
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF2D66F6),
+                          borderRadius: BorderRadius.circular(14),
+                          boxShadow: [
+                            BoxShadow(
+                              blurRadius: 18,
+                              offset: const Offset(0, 10),
+                              color: Colors.black.withOpacity(0.12),
+                            )
+                          ],
+                        ),
+                        child: const Icon(Icons.grid_view_rounded,
+                            color: Colors.white),
+                      ),
+                      const SizedBox(width: 12),
+                      const Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text('Smart Classroom',
+                                style: TextStyle(
+                                    fontWeight: FontWeight.w800, fontSize: 14)),
+                            SizedBox(height: 2),
+                            Text('IoT Management',
+                                style: TextStyle(
+                                    fontSize: 11, color: Colors.grey)),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text('System Status',
+                const SizedBox(height: 18),
+                ...opsItems,
+                if (aiItems.isNotEmpty) ...[
+                  const SizedBox(height: 18),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 14),
+                    child: Align(
+                      alignment: Alignment.centerLeft,
+                      child: Text(
+                        'AI TEACHING ASSISTANT',
                         style: TextStyle(
-                            fontSize: 12, fontWeight: FontWeight.w800)),
-                    const SizedBox(height: 8),
-                    Row(
+                          fontSize: 10.5,
+                          fontWeight: FontWeight.w700,
+                          color: Colors.black.withOpacity(0.45),
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  ...aiItems,
+                ],
+                const SizedBox(height: 18),
+                Padding(
+                  padding: const EdgeInsets.all(14),
+                  child: Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFEAF1FF),
+                      borderRadius: BorderRadius.circular(14),
+                      border: Border.all(color: Colors.black.withOpacity(0.05)),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        const Icon(Icons.circle, size: 10, color: Colors.green),
-                        const SizedBox(width: 8),
-                        Expanded(
-                          child: Text(
-                            'All systems operational',
+                        const Text('System Status',
                             style: TextStyle(
-                              fontSize: 11,
-                              color: Colors.black.withOpacity(0.6),
+                                fontSize: 12, fontWeight: FontWeight.w800)),
+                        const SizedBox(height: 8),
+                        Row(
+                          children: [
+                            const Icon(Icons.circle,
+                                size: 10, color: Colors.green),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                'All systems operational',
+                                style: TextStyle(
+                                  fontSize: 11,
+                                  color: Colors.black.withOpacity(0.6),
+                                ),
+                              ),
                             ),
-                          ),
+                          ],
                         ),
                       ],
                     ),
-                  ],
+                  ),
                 ),
-              ),
+              ],
             ),
-          ],
-        ),
-      ),
+          ),
+        );
+      },
     );
   }
 }

@@ -1,4 +1,8 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- Required for all app networking (API calls, and the 3D AI teacher's
+         WebView) in release builds — debug/profile builds get this for free
+         from Flutter's own debug manifest, which masked its absence here. -->
+    <uses-permission android:name="android.permission.INTERNET"/>
     <application
         android:label="smartapp"
         android:name="${applicationName}"

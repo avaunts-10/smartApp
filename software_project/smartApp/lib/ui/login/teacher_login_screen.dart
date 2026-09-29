@@ -20,10 +20,8 @@ class TeacherLoginScreen extends StatelessWidget {
             break;
         }
       },
-      onSignIn: (email, password, role) async {
-        // TODO: Call your API here
-        debugPrint('Login: $email / $password as ${role.label}');
-      },
+      onSignIn: (email, password, role) =>
+          signInWithRole(context, email, password, role),
     );
   }
 }

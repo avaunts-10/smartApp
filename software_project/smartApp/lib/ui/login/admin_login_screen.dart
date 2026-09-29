@@ -20,11 +20,8 @@ class AdminLoginScreen extends StatelessWidget {
             break;
         }
       },
-      onSignIn: (email, password, role) async {
-        // TODO: Call your API here
-        debugPrint('Login: $email / $password as ${role.label}');
-        Navigator.pushReplacementNamed(context, '/dashboard');
-      },
+      onSignIn: (email, password, role) =>
+          signInWithRole(context, email, password, role),
     );
   }
 }

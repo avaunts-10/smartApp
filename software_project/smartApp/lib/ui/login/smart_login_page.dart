@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../../core/di/app_di.dart';
+
 enum UserRole { admin, teacher, student }
 
 extension UserRoleX on UserRole {
@@ -14,6 +16,9 @@ extension UserRoleX on UserRole {
     }
   }
 
+  /// Matches the role strings the backend stores ('admin' | 'teacher' | 'student').
+  String get apiValue => name;
+
   String get defaultEmail {
     switch (this) {
       case UserRole.admin:
@@ -24,6 +29,31 @@ extension UserRoleX on UserRole {
         return 'student@classroom.com';
     }
   }
+}
+
+/// Shared sign-in flow for all three role login screens.
+///
+/// Verifies the credentials against the backend, enforces that the account's
+/// role matches the login tab that was used, then navigates to the dashboard.
+/// Throws a user-safe message on any failure (the caller shows it).
+Future<void> signInWithRole(
+  BuildContext context,
+  String email,
+  String password,
+  UserRole role,
+) async {
+  final user = await authService.login(email: email, password: password);
+
+  if (user.role != role.apiValue) {
+    await authService.logout();
+    throw Exception(
+      'This account is not a ${role.label} account. '
+      'Please use the correct login for your role.',
+    );
+  }
+
+  if (!context.mounted) return;
+  Navigator.pushReplacementNamed(context, '/dashboard');
 }
 
 class SmartLoginPage extends StatefulWidget {
@@ -90,6 +120,15 @@ class _SmartLoginPageState extends State<SmartLoginPage> {
     setState(() => _loading = true);
     try {
       await widget.onSignIn!(email, pass, widget.role);
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(e.toString().replaceFirst('Exception: ', '')),
+            backgroundColor: Colors.red.shade700,
+          ),
+        );
+      }
     } finally {
       if (mounted) setState(() => _loading = false);
     }
@@ -100,20 +139,13 @@ class _SmartLoginPageState extends State<SmartLoginPage> {
     const primaryBlue = Color(0xFF2D66F6);
 
     return Scaffold(
-      body: Container(
-        width: double.infinity,
-        height: double.infinity,
-        decoration: const BoxDecoration(
-          gradient: RadialGradient(
-            center: Alignment(-0.6, -0.8),
-            radius: 1.3,
-            colors: [Color(0xFFF4FAFF), Color(0xFFEFF6FF), Color(0xFFF7FBFF)],
-          ),
-        ),
+      body: _LoginBackground(
+        role: widget.role,
         child: SafeArea(
-          child: Center(
+          child: Align(
+            alignment: const Alignment(0, -0.7),
             child: SingleChildScrollView(
-              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 28),
+              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 24),
               child: ConstrainedBox(
                 constraints: const BoxConstraints(maxWidth: 460),
                 child: Column(
@@ -124,19 +156,19 @@ class _SmartLoginPageState extends State<SmartLoginPage> {
                       width: 54,
                       height: 54,
                       decoration: BoxDecoration(
-                        color: primaryBlue,
+                        color: Colors.white,
                         borderRadius: BorderRadius.circular(14),
                         boxShadow: [
                           BoxShadow(
-                            blurRadius: 18,
-                            offset: const Offset(0, 10),
-                            color: Colors.black.withOpacity(0.12),
+                            blurRadius: 24,
+                            offset: const Offset(0, 12),
+                            color: Colors.black.withOpacity(0.25),
                           ),
                         ],
                       ),
                       child: const Icon(
                         Icons.lightbulb_outline,
-                        color: Colors.white,
+                        color: primaryBlue,
                         size: 26,
                       ),
                     ),
@@ -149,7 +181,7 @@ class _SmartLoginPageState extends State<SmartLoginPage> {
                       style: TextStyle(
                         fontSize: 22,
                         fontWeight: FontWeight.w700,
-                        color: Color(0xFF0F172A),
+                        color: Colors.white,
                       ),
                     ),
                     const SizedBox(height: 6),
@@ -159,7 +191,7 @@ class _SmartLoginPageState extends State<SmartLoginPage> {
                       style: TextStyle(
                         fontSize: 12.5,
                         fontWeight: FontWeight.w400,
-                        color: Colors.black.withOpacity(0.55),
+                        color: Colors.white.withOpacity(0.7),
                       ),
                     ),
                     const SizedBox(height: 26),
@@ -280,6 +312,35 @@ class _SmartLoginPageState extends State<SmartLoginPage> {
                               ),
                             ],
                           ),
+
+                          const Divider(height: 28),
+                          Center(
+                            child: Wrap(
+                              alignment: WrapAlignment.center,
+                              crossAxisAlignment: WrapCrossAlignment.center,
+                              children: [
+                                Text(
+                                  "Don't have an account? ",
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    color: Colors.black.withOpacity(0.55),
+                                  ),
+                                ),
+                                GestureDetector(
+                                  onTap: () => Navigator.pushNamed(
+                                      context, '/register'),
+                                  child: const Text(
+                                    'Create one',
+                                    style: TextStyle(
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.w700,
+                                      color: Color(0xFF2D66F6),
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
                         ],
                       ),
                     ),
@@ -292,6 +353,26 @@ class _SmartLoginPageState extends State<SmartLoginPage> {
           ),
         ),
       ),
+    );
+  }
+}
+
+/// All three login screens share the same real classroom photo background.
+class _LoginBackground extends StatelessWidget {
+  const _LoginBackground({required this.role, required this.child});
+
+  final UserRole role;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    return Stack(
+      fit: StackFit.expand,
+      children: [
+        Image.asset('assets/images/classroom_blue_bg.jpg', fit: BoxFit.cover),
+        Container(color: const Color(0xFF0B2A4A).withOpacity(0.35)),
+        child,
+      ],
     );
   }
 }
