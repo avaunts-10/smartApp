@@ -4,7 +4,7 @@
   message TEXT NOT NULL,
   attachment_url TEXT,
   attachment_name VARCHAR(255),
-    created_by INTEGER REFERENCES "User"(id),
+    created_by INTEGER REFERENCES users(id),
   created_at TIMESTAMP DEFAULT NOW()
 );
 

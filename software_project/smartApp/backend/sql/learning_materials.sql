@@ -6,7 +6,7 @@ CREATE TABLE IF NOT EXISTS learning_materials (
   file_url TEXT NOT NULL,
   file_name VARCHAR(255),
   file_type VARCHAR(50),
-  uploaded_by INTEGER REFERENCES "User"(id),
+  uploaded_by INTEGER REFERENCES users(id),
   created_at TIMESTAMP DEFAULT NOW()
 );
 
