@@ -3,7 +3,7 @@
   subject_id INTEGER REFERENCES subjects(id),
   title VARCHAR(255) NOT NULL,
   description TEXT,
-  created_by INTEGER REFERENCES "User"(id),
+  created_by INTEGER REFERENCES users(id),
   created_at TIMESTAMP DEFAULT NOW()
 );
 
@@ -22,7 +22,7 @@ CREATE TABLE IF NOT EXISTS quiz_questions (
 CREATE TABLE IF NOT EXISTS quiz_attempts (
   id SERIAL PRIMARY KEY,
   quiz_id INTEGER NOT NULL REFERENCES quizzes(id) ON DELETE CASCADE,
-  student_id INTEGER NOT NULL REFERENCES "User"(id),
+  student_id INTEGER NOT NULL REFERENCES users(id),
   score INT NOT NULL,
   total INT NOT NULL,
   submitted_at TIMESTAMP DEFAULT NOW(),
