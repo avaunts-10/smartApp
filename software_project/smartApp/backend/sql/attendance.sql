@@ -10,6 +10,10 @@ CREATE TABLE IF NOT EXISTS students (
   created_at   TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
+-- RFID card linked to the student (see src/routes/rfid.routes.js). One card
+-- per student; stored normalized as uppercase hex without separators.
+ALTER TABLE students ADD COLUMN IF NOT EXISTS rfid_uid TEXT UNIQUE;
+
 -- One row per enrolled face sample (a student may have several). 128 floats.
 CREATE TABLE IF NOT EXISTS face_descriptors (
   id         SERIAL PRIMARY KEY,

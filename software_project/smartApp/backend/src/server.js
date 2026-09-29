@@ -22,6 +22,7 @@ import noticesRoutes from "./routes/notices.routes.js";
 import materialsRoutes from "./routes/materials.routes.js";
 import quizzesRoutes from "./routes/quizzes.routes.js";
 import aiTeacherRouter from "./routes/aiTeacher.js";
+import rfidRoutes from "./routes/rfid.routes.js";
 import { startSensorSimulator } from "./sensors.js";
 
 dotenv.config();
@@ -82,6 +83,7 @@ app.use("/api/materials", materialsRoutes);
 app.use("/api/quizzes", quizzesRoutes);
 app.use("/api/ai", aiTeacherRouter);
 app.use("/api/sensors", sensorRoutes);
+app.use("/api/rfid", rfidRoutes);
 
 /* ✅ Serve 3D Teacher static files */
 const __filename = fileURLToPath(import.meta.url);

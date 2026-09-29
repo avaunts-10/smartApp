@@ -11,11 +11,11 @@ const staff = requireRole("admin", "teacher");
 // A student scanned after this local hour is marked "late".
 const LATE_AFTER_HOUR = 9;
 
-function todayISO() {
+export function todayISO() {
   return new Date().toISOString().slice(0, 10);
 }
 
-async function summary(date) {
+export async function summary(date) {
   const [{ rows: sc }, { rows: ac }] = await Promise.all([
     pool.query(`SELECT COUNT(*)::int AS n FROM students`),
     pool.query(
@@ -43,7 +43,7 @@ async function summary(date) {
   };
 }
 
-async function activeAttendanceClass(now = new Date()) {
+export async function activeAttendanceClass(now = new Date()) {
   const minute = now.getHours() * 60 + now.getMinutes();
   const { rows } = await pool.query(
     `SELECT id, title, start_minute, attendance_grace_minutes
@@ -54,6 +54,18 @@ async function activeAttendanceClass(now = new Date()) {
     [now.getDay(), minute]
   );
   return rows[0] ?? null;
+}
+
+// Present/late rule shared by every check-in method (face, RFID).
+export function attendanceStatus(activeClass, now = new Date()) {
+  const minute = now.getHours() * 60 + now.getMinutes();
+  if (activeClass) {
+    return minute >=
+      activeClass.start_minute + activeClass.attendance_grace_minutes
+      ? "late"
+      : "present";
+  }
+  return now.getHours() >= LATE_AFTER_HOUR ? "late" : "present";
 }
 
 // GET /api/attendance?date=YYYY-MM-DD
@@ -121,14 +133,7 @@ router.post("/recognize", staff, async (req, res) => {
 
     const now = new Date();
     const activeClass = await activeAttendanceClass(now);
-    const minute = now.getHours() * 60 + now.getMinutes();
-    const status = activeClass
-      ? minute >= activeClass.start_minute + activeClass.attendance_grace_minutes
-        ? "late"
-        : "present"
-      : now.getHours() >= LATE_AFTER_HOUR
-        ? "late"
-        : "present";
+    const status = attendanceStatus(activeClass, now);
     const date = todayISO();
 
     const upsert = await pool.query(
